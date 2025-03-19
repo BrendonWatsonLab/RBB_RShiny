@@ -4,8 +4,8 @@ library(lubridate)
 library(dplyr)
 
 # Define the path to the home directory where experiments are stored
-# home_directory <- "/nfs/turbo/umms-brendonw/RBB_Data"
-home_directory <- "/Users/noahmuscat/Desktop/WatsonLab/SimeoneStuff/RBB_RShiny"
+# home_directory <- "/Users/noahmuscat/Desktop/WatsonLab/SimeoneStuff/RBB_RShiny"
+home_directory <- "/nfs/turbo/umms-brendonw/RBB_Data"
 
 # UI Definition
 ui <- fluidPage(
