@@ -10,25 +10,6 @@ library(ggplot2)
 
 # Define the path to the home directory where experiments are stored
 home_directory <- "/nfs/turbo/umms-brendonw/RBB_Data"
-experiment <- "01"  # assuming you have at least one experiment for testing
-cohort <- "01"      # assuming a cohort for testing
-
-experiment_path <- file.path(home_directory, paste0("experiment_", experiment))
-cat("Experiment Path: ", experiment_path, "\n")
-
-cohort_path <- file.path(experiment_path, paste0("cohort_", cohort))
-cat("Cohort Path: ", cohort_path, "\n")
-
-# Check if these directories exist
-cat("Experiment directory exists:", dir.exists(experiment_path), "\n")
-cat("Cohort directory exists:", dir.exists(cohort_path), "\n")
-
-if (dir.exists(cohort_path)) {
-  csv_files <- list.files(cohort_path, pattern = "\\.csv$", full.names = TRUE, recursive = TRUE)
-  cat("CSV Files found:\n", paste(csv_files, collapse = "\n"))
-} else {
-  cat("Cohort directory does not exist; cannot list files.\n")
-}
 
 # Memoize the data loading function to cache results and improve performance
 cached_load_data <- memoise(function(path, type = "regular", compressed = TRUE) {
@@ -80,8 +61,8 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      selectInput("experiment", "Experiment", choices = c("01")),
-      selectInput("cohort", "Cohort", choices = c("01")),
+      selectInput("experiment", "Experiment", choices = c()),
+      selectInput("cohort", "Cohort", choices = c()),
       uiOutput("rat_select"),
       radioButtons("date_choice", "Select Date Option:", 
                    choices = c("All" = "all", "Single Date" = "single", "Date Range" = "range")),
@@ -110,6 +91,41 @@ ui <- fluidPage(
 
 # Define server logic components
 server <- function(input, output, session) {
+  
+  # Utility function to fetch experiment and cohort list
+  list_experiments_and_cohorts <- function(home_directory) {
+    experiment_dirs <- list.dirs(path = home_directory, full.names = FALSE, recursive = FALSE)
+    experiment_ids <- gsub("experiment_", "", grep("^experiment_\\d{2}$", experiment_dirs, value = TRUE))
+    
+    cohort_lists <- lapply(experiment_ids, function(id) {
+      cohort_dirs <- list.dirs(path = file.path(home_directory, paste0("experiment_", id)), full.names = FALSE, recursive = FALSE)
+      cohort_ids <- gsub("cohort_", "", grep("^cohort_\\d{2}$", cohort_dirs, value = TRUE))
+      return(cohort_ids)
+    })
+    names(cohort_lists) <- experiment_ids
+    
+    return(list(experiments = experiment_ids, cohorts = cohort_lists))
+  }
+  
+  # Store experiment and cohort list in reactive values
+  experiments_and_cohorts <- reactiveValues(data = list())
+  
+  observe({
+    experiments_and_cohorts$data <- list_experiments_and_cohorts(home_directory)
+  })
+  
+  # Update experiment dropdown choices
+  observe({
+    updateSelectInput(session, "experiment", choices = experiments_and_cohorts$data$experiments)
+  })
+  
+  # Update cohort dropdown based on selected experiment
+  observeEvent(input$experiment, {
+    selected_experiment <- input$experiment
+    cohort_choices <- experiments_and_cohorts$data$cohorts[[selected_experiment]]
+    
+    updateSelectInput(session, "cohort", choices = cohort_choices)
+  })
   
   # Collect metadata for available files given an experiment and cohort
   all_files_info <- reactive({
