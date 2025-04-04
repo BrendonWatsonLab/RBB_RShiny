@@ -5,9 +5,9 @@ account: noahmu
 server: rcompute.nursing.umich.edu
 hostUrl: https://rcompute.nursing.umich.edu/__api__
 appId: 49
-bundleId: 207
+bundleId: 208
 url: https://rcompute.nursing.umich.edu/content/d0909a95-1bcd-4530-be96-cfb4078c89a3/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .RData|experiment_TT/cohort_01/RBB01_20250226_235359.csv|experiment_TT/cohort_01/RBB01_Actigraphy/RBB01_20240716_033830_actigraphy.csv|experiment_TT/cohort_01/RBB03_20250226_235359.csv|experiment_TT/cohort_01/RBB04_20250226_235359.csv
+ignoredFiles: .RData

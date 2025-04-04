@@ -25,7 +25,7 @@ cached_load_data <- memoise(function(path, type = "regular", compressed = TRUE) 
         if (class(data$POSIX) != "integer64") {
           stop("POSIX column is not integer64")
         }
-        data[, datetime := as.POSIXct(as.numeric(data$POSIX) / 1e6, origin = "1970-01-01", tz = "America/New_York")]
+        data[, datetime := as.POSIXct(as.numeric(data$POSIX) / 1e6, origin = "1970-01-01", tz = "UTC")]
         if (compressed) {
           data <- data[Digital.Pins != 255]
         }
@@ -257,7 +257,7 @@ server <- function(input, output, session) {
       Beambreaks_Channel_7 = sum(Channel_7),
       Beambreaks_Channel_8 = sum(Channel_8)
     ), by = .(minute = floor_date(datetime, "minute"))]
-    minute_binned[, minute := format(minute, "%Y-%m-%d %H:%M", tz = "America/New_York")]
+    minute_binned[, minute := format(minute, "%Y-%m-%d %H:%M", tz = "UTC")]
     
     datatable(minute_binned, options = list(pageLength = 10))
   }, server = TRUE)
@@ -277,7 +277,7 @@ server <- function(input, output, session) {
       Beambreaks_Channel_6 = sum(Channel_6),
       Beambreaks_Channel_7 = sum(Channel_7),
       Beambreaks_Channel_8 = sum(Channel_8)
-    ), by = .(hour = floor_date(datetime, "hour"))]
+      ), by = .(hour = floor_date(datetime, "hour"))]
   })
   
   # Render hour binned data as a table
@@ -285,7 +285,7 @@ server <- function(input, output, session) {
     hour_binned <- hour_binned_data()
     req(hour_binned)
     # Format the hour to show full datetime
-    hour_binned[, hour := format(hour, "%Y-%m-%d %H:%M", tz = "America/New_York")]
+    hour_binned[, hour := format(hour, "%Y-%m-%d %H:%M", tz = "UTC")]
     
     datatable(hour_binned, options = list(pageLength = 10))
   }, server = TRUE)
