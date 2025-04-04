@@ -277,46 +277,33 @@ for (input_csv_path in input_files) {
     # Base name for output files
     base_output_name <- tools::file_path_sans_ext(base_filename)
     
-    # Read Input CSV Data
-    message("  Reading data...")
-    raw_data <- data.table::fread(input_csv_path, showProgress = FALSE)
-    required_cols <- c("POSIX", "Digital Pins", "Wheel Analog")
-    if (!all(required_cols %in% names(raw_data))) {
-      missing_cols <- setdiff(required_cols, names(raw_data))
-      stop(paste("Input file missing required columns:", paste(missing_cols, collapse=", ")))
-    }
-    raw_data <- as.data.frame(raw_data) # Convert as some helpers might expect data.frame
-    
     # --- Read Input CSV Data ---
     message("  Reading data...")
-    raw_data <- data.table::fread(input_csv_path, showProgress = FALSE)
+    # --- START FIX ---
+    # Force fread to read POSIX as numeric (double)
+    raw_data <- data.table::fread(
+      input_csv_path, 
+      showProgress = FALSE, 
+      colClasses = c(POSIX = "numeric") # Force POSIX to be read as numeric
+    )
+    # --- END FIX ---
     
-    required_cols <- c("POSIX", "Digital Pins", "Wheel Analog")
-    if (!all(required_cols %in% names(raw_data))) {
-      missing_cols <- setdiff(required_cols, names(raw_data))
-      stop(paste("Input file missing required columns:", paste(missing_cols, collapse=", ")))
-    }
-    raw_data <- as.data.frame(raw_data) 
+    # ... (rest of the code: check required_cols, etc.) ... 
+    
+    # --- You can REMOVE the explicit as.numeric block we added before ---
+    # if (!is.numeric(raw_data$POSIX)) {
+    #    message("    Converting POSIX column to numeric...")
+    #    raw_data$POSIX <- as.numeric(raw_data$POSIX) 
+    #    # ... (optional warning check) ...
+    # }
+    # --- Because fread should now handle it directly ---
+    
+    # ...
     
     # --- Data Preparation: Timestamps ---
-    message("  Preparing timestamps...")
-    
-    # Ensure POSIX column is numeric before division/conversion
-    # (fread might read very large integers as character)
-    if (!is.numeric(raw_data$POSIX)) {
-      message("    Converting POSIX column to numeric...")
-      # Use as.numeric which converts to double precision
-      raw_data$POSIX <- as.numeric(raw_data$POSIX) 
-      
-      # Optional: Check if conversion resulted in NAs (indicates non-numeric text)
-      if (anyNA(raw_data$POSIX)) {
-        warning(paste("NA values introduced during POSIX numeric conversion for file:", base_filename, "- Check original data!"))
-        # Consider adding stop() here if NAs are critical errors
-      }
-    }
-    
-    # Convert POSIX microseconds (now reliably numeric) to POSIXct R objects
-    timestamps_posixct <- as.POSIXct(raw_data$POSIX / 1e6, origin = "1970-01-01", tz = TIMEZONE)
+    # ... (this line should now work) ...
+    timestamps_posixct <- as.POSIXct(raw_data$POSIX / 1e6, origin = "1970-01-01", tz = TIMEZONE) 
+    # ... (checks after conversion) ...
     
     # Add a check after conversion to catch unexpected problems
     if (all(is.na(timestamps_posixct))) {
