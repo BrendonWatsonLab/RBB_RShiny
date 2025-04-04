@@ -287,9 +287,43 @@ for (input_csv_path in input_files) {
     }
     raw_data <- as.data.frame(raw_data) # Convert as some helpers might expect data.frame
     
-    # Prepare Timestamps
+    # --- Read Input CSV Data ---
+    message("  Reading data...")
+    raw_data <- data.table::fread(input_csv_path, showProgress = FALSE)
+    
+    required_cols <- c("POSIX", "Digital Pins", "Wheel Analog")
+    if (!all(required_cols %in% names(raw_data))) {
+      missing_cols <- setdiff(required_cols, names(raw_data))
+      stop(paste("Input file missing required columns:", paste(missing_cols, collapse=", ")))
+    }
+    raw_data <- as.data.frame(raw_data) 
+    
+    # --- Data Preparation: Timestamps ---
     message("  Preparing timestamps...")
+    
+    # Ensure POSIX column is numeric before division/conversion
+    # (fread might read very large integers as character)
+    if (!is.numeric(raw_data$POSIX)) {
+      message("    Converting POSIX column to numeric...")
+      # Use as.numeric which converts to double precision
+      raw_data$POSIX <- as.numeric(raw_data$POSIX) 
+      
+      # Optional: Check if conversion resulted in NAs (indicates non-numeric text)
+      if (anyNA(raw_data$POSIX)) {
+        warning(paste("NA values introduced during POSIX numeric conversion for file:", base_filename, "- Check original data!"))
+        # Consider adding stop() here if NAs are critical errors
+      }
+    }
+    
+    # Convert POSIX microseconds (now reliably numeric) to POSIXct R objects
     timestamps_posixct <- as.POSIXct(raw_data$POSIX / 1e6, origin = "1970-01-01", tz = TIMEZONE)
+    
+    # Add a check after conversion to catch unexpected problems
+    if (all(is.na(timestamps_posixct))) {
+      stop(paste("Timestamp conversion resulted in all NA values for file:", base_filename, "- Check POSIX column content/numeric conversion."))
+    } else if (anyNA(timestamps_posixct)) {
+      warning(paste("Some NA values in timestamps after conversion for file:", base_filename))
+    }
     
     # --- Process Wheel Data ---
     message("  Processing wheel data...")
