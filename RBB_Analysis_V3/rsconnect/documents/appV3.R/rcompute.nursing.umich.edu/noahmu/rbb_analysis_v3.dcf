@@ -1,0 +1,13 @@
+name: rbb_analysis_v3
+title: RBB_Analysis_V3
+username: noahmu
+account: noahmu
+server: rcompute.nursing.umich.edu
+hostUrl: https://rcompute.nursing.umich.edu/__api__
+appId: 52
+bundleId: 217
+url: https://rcompute.nursing.umich.edu/content/289e44a4-a0b6-4d8f-b37a-e8ba435f80f5/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: config.txt|RBB_LocalAnalysis_V3.R
