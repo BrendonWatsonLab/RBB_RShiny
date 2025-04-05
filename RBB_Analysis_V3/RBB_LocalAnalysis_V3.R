@@ -34,12 +34,12 @@
 
 # Path to the root directory containing experiment_XX/cohort_XX folders
 # ** Use absolute path for cron compatibility **
-root_data_dir <- "/Users/noahmuscat/Desktop/WatsonLab/SimeoneStuff/Sample_RawData" # <<< SET INPUT ROOT PATH HERE
+root_data_dir <- "/nfs/turbo/umms-brendonw/RBB_Data" # <<< SET INPUT ROOT PATH HERE
 
 # Path to the *main* directory where all output files and subdirectories will be saved
 # ** Use absolute path for cron compatibility **
 # !! IMPORTANT: Ensure this directory exists or the script has permission to create it. !!
-main_output_dir <- "/Users/noahmuscat/Desktop/WatsonLab/SimeoneStuff/Sample_CleanData" # <<< SET MAIN OUTPUT PATH HERE
+main_output_dir <- "/nfs/turbo/umms-brendonw/RBB_Data_Cleaned" # <<< SET MAIN OUTPUT PATH HERE
 
 # Path for the log file tracking processed files.
 # ** Use absolute path for cron compatibility **
