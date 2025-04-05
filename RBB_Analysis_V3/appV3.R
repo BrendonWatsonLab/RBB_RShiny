@@ -79,7 +79,6 @@ ui <- fluidPage(
         id = "main_tabs", # Add an ID for potential future use
         type = "tabs",
         tabPanel("Daily Plots (Counts)", withSpinner(plotOutput("daily_plots_output"))),
-        tabPanel("Hourly Plots (Counts)", withSpinner(plotOutput("hourly_plots_output"))),
         tabPanel("Minute Bin Data (File 6)",
                  withSpinner(DT::dataTableOutput('tbl_minute')),
                  downloadButton('download_minute', 'Download Minute Data')
@@ -283,28 +282,7 @@ server <- function(input, output, session) {
             strip.text = element_text(size = 7)) + # Even smaller facet titles
       scale_x_date(date_breaks = "2 days", date_labels = "%m-%d") # Adjust breaks/labels
   }, height=600) # Increase plot height if needed
-  
-  output$hourly_plots_output <- renderPlot({
-    data_hourly <- loaded_file7(); req(nrow(data_hourly) > 0)
-    req(lubridate::is.POSIXct(data_hourly$BinStartTime))
-    
-    plot_cols <- intersect(COUNT_COL_NAMES, names(data_hourly))
-    req(length(plot_cols) > 0)
-    
-    data_long <- tryCatch(melt(data_hourly, id.vars = "BinStartTime", measure.vars = plot_cols, variable.name = "Label", value.name = "Count"), error=function(e) NULL)
-    req(data_long)
-    data_long[, Label := gsub("Count_", "", Label)]
-    
-    ggplot(data_long, aes(x = BinStartTime, y = Count)) +
-      geom_col(fill = "lightblue") +
-      facet_wrap(~ Label, scales = "free_y", ncol = 4) + # Try 4 columns
-      labs(title = "Total Hourly Beambreak Counts per Channel", x = "Time", y = "Total Count") +
-      theme_bw(base_size = 9) +
-      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), # Rotate 90
-            strip.text = element_text(size = 7)) +
-      scale_x_datetime(date_breaks = "6 hours", date_labels = "%b %d - %H:%M") # Adjust breaks/labels
-  }, height=600) # Increase plot height if needed
-  
+
   # == Table Tabs ==
   output$tbl_minute <- DT::renderDataTable({
     data <- loaded_file6(); req(nrow(data) > 0)
