@@ -301,8 +301,14 @@ if (length(input_files) > 0) { # Only loop if files were found
       # We need File 3 for event detection, File 5 for binning, Wheel for saving
       
       # Create File 3 Data (needed for event detection)
-      digital_pins_raw <- raw_data$Digital.Pins # Use standard data.table access
-      binary_matrix <- t(sapply(digital_pins_raw, number2binary, noBits = 8))
+      # Check both common names just in case fread changed it
+      if ("Digital Pins" %in% names(raw_data)) {
+        digital_pins_raw <- raw_data[["Digital Pins"]] 
+      } else if ("Digital.Pins" %in% names(raw_data)) {
+        digital_pins_raw <- raw_data$Digital.Pins 
+      } else {
+        stop("Column 'Digital Pins' or 'Digital.Pins' not found.")
+      }      binary_matrix <- t(sapply(digital_pins_raw, number2binary, noBits = 8))
       inverted_binary_matrix <- ifelse(binary_matrix == 0, 1, 0)
       file3_data <- data.table(Timestamp = timestamps_posixct, DigitalPins_Raw = digital_pins_raw)
       channel_colnames <- paste0("Channel_", 0:7)
@@ -355,8 +361,13 @@ if (length(input_files) > 0) { # Only loop if files were found
       
       # Calculate Wheel Data
       message("  Processing wheel data...")
-      wheel_voltages <- raw_data$Wheel.Analog # Adjust name if needed
-      wheel_movement <- calculate_wheel_movement_wrap( wheel_voltages, WHEEL_VOLTAGE_MAX, WHEEL_VOLTAGE_THRESHOLD )
+      if ("Wheel Analog" %in% names(raw_data)) {
+        wheel_voltages <- raw_data[["Wheel Analog"]]
+      } else if ("Wheel.Analog" %in% names(raw_data)) {
+        wheel_voltages <- raw_data$Wheel.Analog
+      } else {
+        stop("Column 'Wheel Analog' or 'Wheel.Analog' not found.")
+      }      wheel_movement <- calculate_wheel_movement_wrap( wheel_voltages, WHEEL_VOLTAGE_MAX, WHEEL_VOLTAGE_THRESHOLD )
       wheel_output <- data.table(Timestamp = timestamps_posixct, Wheel_Movement = wheel_movement)
       
       # --- Consolidate and Save Processed Data Chunks ---
