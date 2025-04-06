@@ -51,7 +51,7 @@ processed_log_file <- file.path(main_output_dir, "processed_files.log")
 OVERRIDE_LOG <- FALSE # <<< SET TO TRUE TO FORCE REPROCESSING
 
 # Wheel movement calculation parameters
-WHEEL_VOLTAGE_MAX <- 3.3
+WHEEL_VOLTAGE_MAX <- 5.0
 WHEEL_VOLTAGE_THRESHOLD <- 0.25
 
 # Timezone for converting POSIX timestamps. Adjust if necessary.
