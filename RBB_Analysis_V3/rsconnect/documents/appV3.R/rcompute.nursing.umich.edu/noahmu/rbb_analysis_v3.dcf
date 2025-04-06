@@ -4,10 +4,10 @@ username: noahmu
 account: noahmu
 server: rcompute.nursing.umich.edu
 hostUrl: https://rcompute.nursing.umich.edu/__api__
-appId: 52
-bundleId: 217
-url: https://rcompute.nursing.umich.edu/content/289e44a4-a0b6-4d8f-b37a-e8ba435f80f5/
+appId: 53
+bundleId: 222
+url: https://rcompute.nursing.umich.edu/content/6fde7f9c-0802-4639-9ef5-416be5b47081/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: config.txt|RBB_LocalAnalysis_V3.R
+ignoredFiles: .RData|RBB_LocalAnalysis_V3.R
