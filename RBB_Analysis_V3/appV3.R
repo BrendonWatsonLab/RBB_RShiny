@@ -1,7 +1,7 @@
 # ============================================================================
 # Script: appV3.R
 # Author: Noah Muscat, Simeone Marino
-# Date: 2025-04-05 # Updated Date
+# Date: 2025-04-05
 # Description:
 #   Optimized R Shiny app for visualizing pre-processed RBB data.
 #   Uses a pre-generated manifest file ('processed_manifest.rds') for fast
