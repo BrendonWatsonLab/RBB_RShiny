@@ -127,25 +127,33 @@ for (input_csv_path in input_files) {
       print("------------------------------------------")
       print(paste("DEBUG: Checking path/filename:", input_csv_path))
       print(paste("DEBUG: base_output_name =", base_output_name))
-      # Define patterns locally for clarity in the debug output
-      local_base_name_pattern <- "^(RBB\\d{2})_(\\d{8}_\\d{6})$"
+      
+      # <<< MODIFIED PATTERN >>>
+      local_base_name_pattern <- "^(RBB\\d{2})_(\\d{8})_(\\d{6})$" # Separate date and time groups
       local_path_pattern <- ".*/(experiment_(\\d{2}))/(cohort_(\\d{2}))/.*"
-      normalized_input_path_for_regex <- gsub("\\\\", "/", input_csv_path) # Ensure forward slashes
+      normalized_input_path_for_regex <- gsub("\\\\", "/", input_csv_path)
+      
       print(paste("DEBUG: Normalized path for regex =", normalized_input_path_for_regex))
-      print(paste("DEBUG: Filename pattern =", local_base_name_pattern))
+      print(paste("DEBUG: Filename pattern =", local_base_name_pattern)) # Will show updated pattern
       print(paste("DEBUG: Path pattern =", local_path_pattern))
-      # Run str_match and store results
+      
       temp_base_match <- stringr::str_match(base_output_name, local_base_name_pattern)
       temp_path_match <- stringr::str_match(normalized_input_path_for_regex, local_path_pattern)
+      
       print("DEBUG: base_match result:")
-      print(temp_base_match)
+      print(temp_base_match) # Expect 4 columns now if match succeeds
       print("DEBUG: path_match result:")
       print(temp_path_match)
       print("--- End Debugging Parsing ---")
-      # Original if condition using the temp variables
+      
+      # Original if condition - should now work correctly if patterns match
       if (!anyNA(temp_base_match) && NCOL(temp_base_match) >= 4 && !anyNA(temp_path_match) && NCOL(temp_path_match) >= 5) {
-        rat_id <- temp_base_match[1, 2] ; date_str <- temp_base_match[1, 3] ; time_str <- temp_base_match[1, 4]
-        exp_id <- temp_path_match[1, 3] ; cohort_id <- temp_path_match[1, 5]
+        # <<< ADJUSTED INDICES >>>
+        rat_id <- temp_base_match[1, 2]   # Group 1 -> Column 2
+        date_str <- temp_base_match[1, 3] # Group 2 -> Column 3
+        time_str <- temp_base_match[1, 4] # Group 3 -> Column 4
+        exp_id <- temp_path_match[1, 3]   # Group 2 -> Column 3
+        cohort_id <- temp_path_match[1, 5] # Group 4 -> Column 5
         date_obj <- lubridate::ymd(date_str, quiet = TRUE)
         message(paste("  Extracted Metadata: Exp=", exp_id, " Cohort=", cohort_id, " Rat=", rat_id, " Date=", date_str))
       } else {
