@@ -1,6 +1,6 @@
 # ============================================================================
-# Script: RBB_LocalAnalysis_V3.R # Renamed for clarity
-# Author: Noah Muscat, Simeone Marino
+# Script: RBB_LocalAnalysis_V3.R 
+# Author: Simeone Marino, Noah Muscat
 # Date: 2025-04-06
 # R Version: 4.x
 # Description:
@@ -466,19 +466,30 @@ for (input_csv_path in input_files) {
       wheel_movement <- calculate_wheel_movement_wrap(
         wheel_voltages, WHEEL_VOLTAGE_MAX, WHEEL_VOLTAGE_THRESHOLD
       )
+      # Create table with all timestamps and calculated movements (including zeros)
       wheel_output <- data.table(
         Timestamp = timestamps_posixct,
         Wheel_Movement = wheel_movement
       )
+      
+      rows_before_filter <- nrow(wheel_output)
+      wheel_output_filtered <- wheel_output[Wheel_Movement > 0]
+      rows_after_filter <- nrow(wheel_output_filtered)
+      message(
+        paste("    Filtered wheel data:", rows_after_filter,
+              "rows with movement > 0 remain out of", rows_before_filter)
+      )
+
       wheel_output_filename <- file.path(
         target_sub_dir,
         paste0(base_output_name, "_WheelMovement.csv")
       )
       message(paste("    Saving:", basename(wheel_output_filename)))
+      # Save the FILTERED data table
       data.table::fwrite(
-        wheel_output,
+        wheel_output_filtered, # <<< Use the filtered table
         wheel_output_filename,
-        dateTimeAs = "write.csv" # Use format readable by lubridate
+        dateTimeAs = "write.csv"
       )
       
       # --- Process Beambreak Data ---

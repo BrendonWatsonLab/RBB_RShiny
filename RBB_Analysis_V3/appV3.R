@@ -1,6 +1,6 @@
 # ============================================================================
-# Script: appV3.R # 
-# Author: Noah Muscat, Simeone Marino
+# Script: appV3.R 
+# Author: Simeone Marino, Noah Muscat
 # Date: 2025-04-06
 # Description:
 #   Optimized R Shiny app for visualizing pre-processed RBB data.
