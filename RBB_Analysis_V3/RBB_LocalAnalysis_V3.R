@@ -121,30 +121,15 @@ for (input_csv_path in input_files) {
       required_cols <- c("POSIX", "Digital Pins", "Wheel Analog")
       if (!all(required_cols %in% names(raw_data))) { stop(paste("Input file missing required columns:", paste(setdiff(required_cols, names(raw_data)), collapse=", "))) }
       
-      # Extract Metadata + DEBUGGING
+      # Extract Metadata
       rat_id <- NA; date_str <- NA; time_str <- NA; exp_id <- NA; cohort_id <- NA; date_obj <- as.Date(NA)
-      # --- Start Debugging Parsing ---
-      print("------------------------------------------")
-      print(paste("DEBUG: Checking path/filename:", input_csv_path))
-      print(paste("DEBUG: base_output_name =", base_output_name))
       
-      # <<< MODIFIED PATTERN >>>
       local_base_name_pattern <- "^(RBB\\d{2})_(\\d{8})_(\\d{6})$" # Separate date and time groups
       local_path_pattern <- ".*/(experiment_(\\d{2}))/(cohort_(\\d{2}))/.*"
       normalized_input_path_for_regex <- gsub("\\\\", "/", input_csv_path)
       
-      print(paste("DEBUG: Normalized path for regex =", normalized_input_path_for_regex))
-      print(paste("DEBUG: Filename pattern =", local_base_name_pattern)) # Will show updated pattern
-      print(paste("DEBUG: Path pattern =", local_path_pattern))
-      
       temp_base_match <- stringr::str_match(base_output_name, local_base_name_pattern)
       temp_path_match <- stringr::str_match(normalized_input_path_for_regex, local_path_pattern)
-      
-      print("DEBUG: base_match result:")
-      print(temp_base_match) # Expect 4 columns now if match succeeds
-      print("DEBUG: path_match result:")
-      print(temp_path_match)
-      print("--- End Debugging Parsing ---")
       
       # Original if condition - should now work correctly if patterns match
       if (!anyNA(temp_base_match) && NCOL(temp_base_match) >= 4 && !anyNA(temp_path_match) && NCOL(temp_path_match) >= 5) {
