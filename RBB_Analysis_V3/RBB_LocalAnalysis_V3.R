@@ -1,7 +1,7 @@
 # ============================================================================
-# Script: RBB_LocalAnalysis_V3.R 
-# Authors: Simeone Marino, Noah Muscat
-# Date: 2025-04-06 
+# Script: RBB_LocalAnalysis_V3.R # Renamed for clarity
+# Author: Noah Muscat, Simeone Marino
+# Date: 2025-04-06
 # R Version: 4.x
 # Description:
 #   Processes raw behavioral data from RBB experiments. Iterates through
@@ -45,15 +45,15 @@
 #     - Location: 'processed_manifest.rds' in main_output_dir.
 #     - Content: RDS file with data.table of previous output file metadata.
 #     - Purpose: Base for incremental update of the manifest.
-#
+
 # OUTPUTS:
 #   - Processed Data Files:
 #     - Location: In main_output_dir/experiment_XX/cohort_XX/
 #     - Format: CSV files saved via data.table::fwrite().
 #     - Types (per input file with data):
-#       - *_WheelMovement.csv (Timestamp, Wheel_Movement)
-#       - *_File3.csv (Raw digital states - NOTE: Not logged in manifest by default)
-#       - *_File4.csv (Raw events list - NOTE: Not logged in manifest by default)
+#       - *_WheelMovement.csv (Timestamp, Wheel_Movement) - Logged in manifest
+#       - *_File3.csv (Raw digital states - NOTE: Not logged in manifest)
+#       - *_File4.csv (Raw events list - NOTE: Not logged in manifest)
 #       - *_File5.csv (Labeled events - Logged in manifest)
 #       - *_File6.csv (1-min binned data - Logged in manifest)
 #       - *_File7.csv (1-hour binned data - Logged in manifest)
@@ -67,10 +67,10 @@
 #     - Action: Overwritten with latest metadata.
 #     - Format: RDS file containing a single data.table.
 #     - Content: Metadata (file_path, experiment_id, cohort_id, rat_id, date,
-#                time_str, file_type) for relevant output files (currently:
-#                File5, File6, File7, File8, WheelMovement). Includes previous
-#                and new data (unless OVERRIDE_LOG=TRUE). Saves empty but
-#                structured table if no valid outputs found/generated.
+#                time_str, file_type) for relevant output files (File5, File6,
+#                File7, File8, WheelMovement). Includes previous & new data
+#                (unless OVERRIDE_LOG=TRUE). Saves empty but structured table
+#                if no valid outputs found/generated.
 #   - Console Output:
 #     - Messages: Progress, warnings (empty files, parsing errors), summary.
 #     - Errors: Details if processing fails for specific files or critical steps.
@@ -85,7 +85,7 @@ processed_log_file <- file.path(main_output_dir, "processed_files.log")
 # Set FALSE to only process new/unlogged files & update manifest incrementally
 OVERRIDE_LOG <- FALSE
 
-WHEEL_VOLTAGE_MAX <- 5.0 # Volts 
+WHEEL_VOLTAGE_MAX <- 5.0 # Volts (User specified)
 WHEEL_VOLTAGE_THRESHOLD <- 0.25
 TIMEZONE <- "UTC"
 
@@ -110,7 +110,7 @@ message("Packages loaded successfully.")
 
 # --- Helper Functions ---
 
-# Convert integer to binary vector
+#' Convert integer to binary vector
 number2binary <- function(number, noBits) {
   binary_vector <- rev(as.numeric(intToBits(number)))
   if (length(binary_vector) >= noBits) {
@@ -121,7 +121,7 @@ number2binary <- function(number, noBits) {
   }
 }
 
-# Calculate single step wheel movement (handles wrap-around & threshold)
+#' Calculate single step wheel movement (handles wrap-around & threshold)
 calculate_single_step_movement <- function(v1, v2,
                                            v_max = WHEEL_VOLTAGE_MAX,
                                            v_threshold = WHEEL_VOLTAGE_THRESHOLD) {
@@ -133,7 +133,7 @@ calculate_single_step_movement <- function(v1, v2,
   return(movement)
 }
 
-# Calculate wheel movement vector using voltage differences
+#' Calculate wheel movement vector using voltage differences
 calculate_wheel_movement_wrap <- function(wheel_voltages,
                                           voltage_max = WHEEL_VOLTAGE_MAX,
                                           voltage_threshold = WHEEL_VOLTAGE_THRESHOLD) {
@@ -157,12 +157,16 @@ calculate_wheel_movement_wrap <- function(wheel_voltages,
   return(movement_values)
 }
 
-# Create binned summary data (Counts and Durations) using data.table
+#' Create binned summary data (Counts and Durations) using data.table
 create_binned_data <- function(event_data, bin_width) {
   # --- Input Validation ---
   required_cols_binned <- c("StartTime", "Label", "Duration")
-  if (!is.data.frame(event_data) || !all(required_cols_binned %in% names(event_data))) {
-    stop("Input 'event_data' must be a data frame with 'StartTime', 'Label', and 'Duration' columns.")
+  if (!is.data.frame(event_data) ||
+      !all(required_cols_binned %in% names(event_data))) {
+    stop(
+      paste("Input 'event_data' must be a data frame with columns:",
+            paste(required_cols_binned, collapse=", "))
+    )
   }
   if (!lubridate::is.POSIXct(event_data$StartTime)) {
     stop("'StartTime' column must be POSIXct.")
@@ -178,16 +182,27 @@ create_binned_data <- function(event_data, bin_width) {
   expected_value_cols <- c(expected_count_cols, expected_duration_cols)
   final_ordered_cols <- c("BinStartTime", expected_value_cols)
   
+  # --- Create Empty Output Structure (Helper) ---
+  create_empty_binned_dt <- function() {
+    empty_dt <- data.table::data.table(
+      BinStartTime = as.POSIXct(character())
+    )
+    for (col in expected_value_cols) {
+      col_type <- if(startsWith(col, "Count_")) integer(0) else numeric(0)
+      empty_dt[, (col) := col_type]
+    }
+    try(data.table::setcolorder(empty_dt, neworder = final_ordered_cols),
+        silent = TRUE)
+    return(empty_dt)
+  }
+  
   # --- Handle Empty Input ---
   if (nrow(event_data) == 0) {
-    message(paste("Input data for binning ('", bin_width, "') is empty. Returning empty data.table.", sep=""))
-    empty_dt <- data.table::data.table(BinStartTime = as.POSIXct(character()))
-    for (col in expected_value_cols) {
-      empty_dt[, (col) := if(startsWith(col, "Count_")) integer(0) else numeric(0)]
-    }
-    # Attempt to set column order even for empty table
-    try(data.table::setcolorder(empty_dt, neworder = final_ordered_cols), silent=TRUE)
-    return(empty_dt)
+    message(
+      paste("Input data for binning ('", bin_width, "') is empty.",
+            "Returning empty data.table.", sep = "")
+    )
+    return(create_empty_binned_dt())
   }
   
   message(paste("  Binning data by:", bin_width, "using data.table"))
@@ -198,25 +213,25 @@ create_binned_data <- function(event_data, bin_width) {
   
   if (nrow(event_dt) == 0) {
     message("No valid StartTime entries found after NA removal for binning.")
-    # Return empty structure matching expected output
-    empty_dt <- data.table::data.table(BinStartTime = as.POSIXct(character()))
-    for (col in expected_value_cols) {
-      empty_dt[, (col) := if(startsWith(col, "Count_")) integer(0) else numeric(0)]
-    }
-    try(data.table::setcolorder(empty_dt, neworder = final_ordered_cols), silent=TRUE)
-    return(empty_dt)
+    return(create_empty_binned_dt())
   }
   
   # Floor date and aggregate counts/durations
   event_dt[, BinStartTime := lubridate::floor_date(StartTime, unit = bin_width)]
   binned_dt <- event_dt[,
                         .(Count = .N, TotalDuration = sum(Duration, na.rm = TRUE)),
-                        by = .(BinStartTime, Label)]
+                        by = .(BinStartTime, Label)
+  ]
   
   # --- Reshape to Wide Format ---
   binned_wide_dt <- tryCatch({
-    data.table::dcast(binned_dt, BinStartTime ~ Label,
-                      value.var = c("Count", "TotalDuration"), fill = 0, sep = "_")
+    data.table::dcast(
+      binned_dt,
+      BinStartTime ~ Label,
+      value.var = c("Count", "TotalDuration"),
+      fill = 0,
+      sep = "_"
+    )
   }, error = function(e) {
     message("!!! ERROR during data.table::dcast: ", e$message)
     return(data.table::data.table()) # Return empty table on dcast error
@@ -229,12 +244,9 @@ create_binned_data <- function(event_data, bin_width) {
   if (length(missing_cols) > 0) {
     suppressWarnings({
       for (col in missing_cols) {
-        # Assign correct type (integer for Count, numeric for Duration)
-        if (startsWith(col, "Count_")) {
-          binned_wide_dt[, (col) := 0L]
-        } else {
-          binned_wide_dt[, (col) := 0.0]
-        }
+        # Assign correct type
+        col_type <- if (startsWith(col, "Count_")) 0L else 0.0
+        binned_wide_dt[, (col) := col_type]
       }
     })
   }
@@ -244,7 +256,7 @@ create_binned_data <- function(event_data, bin_width) {
   if ("BinStartTime" %in% names(binned_wide_dt) && nrow(binned_wide_dt) > 0) {
     # Keep only expected columns
     final_select_cols <- intersect(final_ordered_cols, names(binned_wide_dt))
-    binned_wide_dt <- binned_wide_dt[, ..final_select_cols] # Use data.table subsetting
+    binned_wide_dt <- binned_wide_dt[, ..final_select_cols] # data.table subset
     
     # Ensure final column order and row order
     data.table::setcolorder(binned_wide_dt, neworder = final_select_cols)
@@ -253,16 +265,11 @@ create_binned_data <- function(event_data, bin_width) {
   } else {
     # Handle cases where dcast failed or produced empty results
     message("    Result after dcast/column handling is empty. Creating empty structure.")
-    empty_dt <- data.table::data.table(BinStartTime = as.POSIXct(character()))
-    for (col in expected_value_cols) {
-      empty_dt[, (col) := if(startsWith(col, "Count_")) integer(0) else numeric(0)]
-    }
-    try(data.table::setcolorder(empty_dt, neworder = final_ordered_cols), silent=TRUE)
-    binned_final <- empty_dt
+    binned_final <- create_empty_binned_dt()
   }
   
   return(binned_final)
-} 
+} # End create_binned_data
 
 
 # --- Main Processing Logic ---
@@ -277,17 +284,18 @@ manifest_file_path <- file.path(main_output_dir, "processed_manifest.rds")
 # --- Read Log of Previously Processed Files (or Override) ---
 processed_files_list <- character(0)
 if (OVERRIDE_LOG) {
-  message("OVERRIDE_LOG is TRUE. Ignoring processed files log and reprocessing all found files.")
+  message("OVERRIDE_LOG is TRUE. Ignoring processed files log.")
 } else if (file.exists(processed_log_file)) {
   message(paste("Reading processed files log:", processed_log_file))
   tryCatch({
     processed_files_list <- unique(readLines(processed_log_file, warn = FALSE))
-    # Remove any potential empty lines read
-    processed_files_list <- processed_files_list[processed_files_list != ""]
+    processed_files_list <- processed_files_list[processed_files_list != ""] # Remove empty lines
     message(paste("  Found", length(processed_files_list), "files previously processed."))
   }, error = function(e) {
-    warning(paste("Could not read processed files log:", processed_log_file,
-                  "\nError:", e$message, "\nProcessing all found files."))
+    warning(
+      paste("Could not read processed files log:", processed_log_file,
+            "\nError:", e$message, "\nProcessing all found files.")
+    )
     processed_files_list <- character(0)
   })
 } else {
@@ -308,11 +316,15 @@ input_files_pattern <- "experiment_\\d{2}/cohort_\\d{2}/RBB\\d{2}_\\d{8}_\\d{6}\
 input_files <- grep(input_files_pattern, all_files, value = TRUE, ignore.case = TRUE)
 
 if (length(input_files) == 0) {
-  stop(paste("No input CSV files found matching the pattern '", input_files_pattern,
-             "' in:", root_data_dir))
+  stop(
+    paste("No input CSV files found matching the pattern '", input_files_pattern,
+          "' in:", root_data_dir)
+  )
 } else {
-  message(paste("Found", length(input_files),
-                "total input CSV files potentially needing processing."))
+  message(
+    paste("Found", length(input_files),
+          "total input CSV files potentially needing processing.")
+  )
 }
 
 
@@ -349,7 +361,9 @@ for (input_csv_path in input_files) {
     # Ensure forward slashes for consistent relative path calculation
     normalized_file_dir <- gsub("\\\\", "/", file_dir)
     normalized_root_fwd <- gsub("\\\\", "/", normalized_root)
-    relative_path <- sub(paste0("^", normalized_root_fwd, "/?"), "", normalized_file_dir)
+    relative_path <- sub(
+      paste0("^", normalized_root_fwd, "/?"), "", normalized_file_dir
+    )
     target_sub_dir <- file.path(main_output_dir, relative_path)
     
     # Create output subdirectory if needed
@@ -365,19 +379,23 @@ for (input_csv_path in input_files) {
     
     # --- Handle Empty File Case (Header Only) ---
     if (nrow(raw_data) == 0) {
-      warning(paste("Input file contains no data rows (only header):", base_filename))
+      warning(
+        paste("Input file contains no data rows (only header):", base_filename)
+      )
       files_skipped_empty_count <- files_skipped_empty_count + 1
       
       # Log as processed in main log file to avoid re-processing
       if (!OVERRIDE_LOG) {
         message("  Logging empty file as processed in log file.")
-        tryCatch( write(input_csv_path, file = processed_log_file, append = TRUE),
-                  error = function(e) {
-                    warning("Could not write empty file to processed log file: ",
-                            processed_log_file)
-                  })
+        tryCatch(
+          write(input_csv_path, file = processed_log_file, append = TRUE),
+          error = function(e) {
+            warning("Could not write empty file to processed log file: ",
+                    processed_log_file)
+          }
+        )
       }
-      # Mark as handled for this iteration
+      # Mark as handled for this iteration; the 'else' block is skipped
       file_handled_this_iter <- TRUE
       
       # --- Process File with Data Case ---
@@ -387,8 +405,10 @@ for (input_csv_path in input_files) {
       required_cols <- c("POSIX", "Digital Pins", "Wheel Analog")
       if (!all(required_cols %in% names(raw_data))) {
         missing_cols <- setdiff(required_cols, names(raw_data))
-        stop(paste("Input file missing required columns:",
-                   paste(missing_cols, collapse = ", ")))
+        stop(
+          paste("Input file missing required columns:",
+                paste(missing_cols, collapse = ", "))
+        )
       }
       
       # --- Extract Metadata ---
@@ -400,7 +420,8 @@ for (input_csv_path in input_files) {
       normalized_input_path_for_regex <- gsub("\\\\", "/", input_csv_path)
       
       temp_base_match <- stringr::str_match(base_output_name, base_name_pattern)
-      temp_path_match <- stringr::str_match(normalized_input_path_for_regex, path_pattern)
+      temp_path_match <- stringr::str_match(normalized_input_path_for_regex,
+                                            path_pattern)
       
       # Check if both regex matches were successful
       if (!anyNA(temp_base_match) && NCOL(temp_base_match) >= 4 &&
@@ -412,23 +433,31 @@ for (input_csv_path in input_files) {
         exp_id    <- temp_path_match[1, 3]
         cohort_id <- temp_path_match[1, 5]
         date_obj  <- lubridate::ymd(date_str, quiet = TRUE)
-        message(paste("  Extracted Metadata: Exp=", exp_id,
-                      " Cohort=", cohort_id, " Rat=", rat_id, " Date=", date_str))
+        message(
+          paste("  Extracted Metadata: Exp=", exp_id,
+                " Cohort=", cohort_id, " Rat=", rat_id, " Date=", date_str)
+        )
       } else {
         # Warn if parsing failed
-        warning(paste("Could not parse Experiment/Cohort/Rat/Date from",
-                      "path/filename:", input_csv_path,
-                      " - Metadata will be skipped."))
+        warning(
+          paste("Could not parse Experiment/Cohort/Rat/Date from",
+                "path/filename:", input_csv_path,
+                " - Metadata will be skipped.")
+        )
       }
       
       # --- Prepare Timestamps ---
       message("  Preparing timestamps...")
       if (inherits(raw_data$POSIX, "integer64")) {
-        timestamps_posixct <- as.POSIXct(as.double(raw_data$POSIX) / 1e6,
-                                         origin = "1970-01-01", tz = TIMEZONE)
+        timestamps_posixct <- as.POSIXct(
+          as.double(raw_data$POSIX) / 1e6,
+          origin = "1970-01-01", tz = TIMEZONE
+        )
       } else {
-        timestamps_posixct <- as.POSIXct(raw_data$POSIX / 1e6,
-                                         origin = "1970-01-01", tz = TIMEZONE)
+        timestamps_posixct <- as.POSIXct(
+          raw_data$POSIX / 1e6,
+          origin = "1970-01-01", tz = TIMEZONE
+        )
       }
       
       # --- Process Wheel Data ---
@@ -437,13 +466,20 @@ for (input_csv_path in input_files) {
       wheel_movement <- calculate_wheel_movement_wrap(
         wheel_voltages, WHEEL_VOLTAGE_MAX, WHEEL_VOLTAGE_THRESHOLD
       )
-      wheel_output <- data.table(Timestamp = timestamps_posixct,
-                                 Wheel_Movement = wheel_movement)
-      wheel_output_filename <- file.path(target_sub_dir,
-                                         paste0(base_output_name, "_WheelMovement.csv"))
+      wheel_output <- data.table(
+        Timestamp = timestamps_posixct,
+        Wheel_Movement = wheel_movement
+      )
+      wheel_output_filename <- file.path(
+        target_sub_dir,
+        paste0(base_output_name, "_WheelMovement.csv")
+      )
       message(paste("    Saving:", basename(wheel_output_filename)))
-      data.table::fwrite(wheel_output, wheel_output_filename,
-                         dateTimeAs = "write.csv") # Ensure consistent timestamp format
+      data.table::fwrite(
+        wheel_output,
+        wheel_output_filename,
+        dateTimeAs = "write.csv" # Use format readable by lubridate
+      )
       
       # --- Process Beambreak Data ---
       message("  Processing beambreak data...")
@@ -452,89 +488,91 @@ for (input_csv_path in input_files) {
       message("    Generating File 3...")
       digital_pins_raw <- raw_data$`Digital Pins`
       if (inherits(digital_pins_raw, "integer64")) {
-        # Assuming pin values fit within standard integer range
         digital_pins_raw <- as.integer(digital_pins_raw)
       }
       binary_matrix <- t(sapply(digital_pins_raw, number2binary, noBits = 8))
-      inverted_binary_matrix <- ifelse(binary_matrix == 0, 1, 0) # 1 = Event/Break
-      file3_data <- data.table(Timestamp = timestamps_posixct,
-                               DigitalPins_Raw = digital_pins_raw)
+      inverted_binary_matrix <- 1 - binary_matrix # Simpler inversion
+      file3_data <- data.table(
+        Timestamp = timestamps_posixct,
+        DigitalPins_Raw = digital_pins_raw
+      )
       colnames(inverted_binary_matrix) <- paste0("Channel_", 0:7)
       file3_data <- cbind(file3_data, inverted_binary_matrix)
-      file3_output_filename <- file.path(target_sub_dir,
-                                         paste0(base_output_name, "_File3.csv"))
+      file3_output_filename <- file.path(
+        target_sub_dir,
+        paste0(base_output_name, "_File3.csv")
+      )
       message(paste("      Saving:", basename(file3_output_filename)))
-      data.table::fwrite(file3_data, file3_output_filename,
-                         dateTimeAs = "write.csv")
+      data.table::fwrite(
+        file3_data,
+        file3_output_filename,
+        dateTimeAs = "write.csv"
+      )
       
       # == Generate File 4: Event List ==
       message("    Generating File 4 (Detecting Events)...")
       file4_list <- list()
       for (j in 0:7) {
         channel_vector <- file3_data[[paste0("Channel_", j)]]
-        starts <- which(diff(c(0, channel_vector)) == 1)
-        ends   <- which(diff(c(channel_vector, 0)) == -1)
+        # Use run-length encoding to find start/end of consecutive 1s
+        rle_result <- rle(channel_vector)
+        event_indices <- which(rle_result$values == 1)
         
-        if (length(starts) > 0 && length(ends) > 0) {
-          # Basic alignment: remove leading end / trailing start
-          if (ends[1] < starts[1]) ends <- ends[-1]
-          if (length(ends) == 0) next
-          if (starts[length(starts)] > ends[length(ends)]) starts <- starts[-length(starts)]
-          if (length(starts) == 0) next
+        if (length(event_indices) > 0) {
+          event_lengths <- rle_result$lengths[event_indices]
+          # Calculate cumulative sums to find end positions
+          event_ends_cum <- cumsum(rle_result$lengths)[event_indices]
+          # Calculate start positions
+          event_starts <- event_ends_cum - event_lengths + 1
           
-          n_events <- min(length(starts), length(ends))
-          if (n_events > 0) {
-            start_indices <- starts[1:n_events]
-            end_indices   <- ends[1:n_events]
-            # Ensure end >= start for each potential pair
-            valid_pair_indices <- which(end_indices >= start_indices)
-            
-            if (length(valid_pair_indices) > 0) {
-              start_indices     <- start_indices[valid_pair_indices]
-              end_indices       <- end_indices[valid_pair_indices]
-              event_start_times <- timestamps_posixct[start_indices]
-              event_end_times   <- timestamps_posixct[end_indices]
-              durations_seconds <- as.numeric(
-                difftime(event_end_times, event_start_times, units = "secs")
-              )
-              # Keep only events with positive duration
-              valid_durations   <- durations_seconds > 0
-              
-              if (sum(valid_durations) > 0) {
-                channel_events <- data.table(
-                  StartTime = event_start_times[valid_durations],
-                  ChannelID = j,
-                  Duration  = durations_seconds[valid_durations]
-                )
-                if (nrow(channel_events) > 0) {
-                  file4_list[[length(file4_list) + 1]] <- channel_events
-                }
-              } # end if valid durations exist
-            } # end if valid pairs exist
-          } # end if n_events > 0
-        } # end if starts and ends exist
+          # Get times and durations
+          event_start_times <- timestamps_posixct[event_starts]
+          # Use index before the end for duration calculation? No, use end index.
+          event_end_times   <- timestamps_posixct[event_ends_cum]
+          durations_seconds <- as.numeric(
+            difftime(event_end_times, event_start_times, units = "secs")
+          )
+          
+          # Add check for valid times and positive durations
+          valid_events <- !is.na(event_start_times) &
+            !is.na(event_end_times) &
+            durations_seconds > 0
+          
+          if (any(valid_events)) {
+            channel_events <- data.table(
+              StartTime = event_start_times[valid_events],
+              ChannelID = j,
+              Duration  = durations_seconds[valid_events]
+            )
+            file4_list[[length(file4_list) + 1]] <- channel_events
+          }
+        }
       } # End channel loop (j)
       
       # Combine results for File 4
       if (length(file4_list) > 0) {
         file4_data <- data.table::rbindlist(file4_list)
-        data.table::setorder(file4_data, StartTime) # Order events chronologically
+        data.table::setorder(file4_data, StartTime) # Order events
       } else {
         file4_data <- data.table(StartTime = as.POSIXct(character()),
                                  ChannelID = integer(),
                                  Duration = numeric())
         message("      WARNING: No beambreak events detected for File 4.")
       }
-      file4_output_filename <- file.path(target_sub_dir,
-                                         paste0(base_output_name, "_File4.csv"))
+      file4_output_filename <- file.path(
+        target_sub_dir,
+        paste0(base_output_name, "_File4.csv")
+      )
       message(paste("      Saving:", basename(file4_output_filename)))
-      data.table::fwrite(file4_data, file4_output_filename,
-                         dateTimeAs = "write.csv")
+      data.table::fwrite(
+        file4_data,
+        file4_output_filename,
+        dateTimeAs = "write.csv"
+      )
       
       # == Generate File 5: Labeled Events ==
       message("    Generating File 5...")
       if (nrow(file4_data) > 0) {
-        # Use data.table syntax
         file5_data <- copy(file4_data)[, Label := CHANNEL_LABELS[ChannelID + 1]]
         # Select and reorder columns
         file5_data <- file5_data[, .(StartTime, Label, Duration)]
@@ -544,11 +582,16 @@ for (input_csv_path in input_files) {
                                  Duration = numeric())
         message("      WARNING: File 4 was empty, File 5 will also be empty.")
       }
-      file5_output_filename <- file.path(target_sub_dir,
-                                         paste0(base_output_name, "_File5.csv"))
+      file5_output_filename <- file.path(
+        target_sub_dir,
+        paste0(base_output_name, "_File5.csv")
+      )
       message(paste("      Saving:", basename(file5_output_filename)))
-      data.table::fwrite(file5_data, file5_output_filename,
-                         dateTimeAs = "write.csv")
+      data.table::fwrite(
+        file5_data,
+        file5_output_filename,
+        dateTimeAs = "write.csv"
+      )
       
       # == Generate Files 6, 7, 8: Binned Data ==
       if (nrow(file5_data) > 0) {
@@ -556,14 +599,20 @@ for (input_csv_path in input_files) {
         bin_widths <- c("1 min", "1 hour", "1 day")
         file_numbers <- c(6, 7, 8)
         for (i in 1:length(bin_widths)) {
-          # Pass data.frame if helper needs it, else keep as data.table if possible
-          binned_data <- create_binned_data(as.data.frame(file5_data),
-                                            bin_width = bin_widths[i])
-          output_filename <- file.path(target_sub_dir,
-                                       paste0(base_output_name, "_File", file_numbers[i], ".csv"))
+          binned_data <- create_binned_data(
+            as.data.frame(file5_data), # Pass data.frame if helper expects it
+            bin_width = bin_widths[i]
+          )
+          output_filename <- file.path(
+            target_sub_dir,
+            paste0(base_output_name, "_File", file_numbers[i], ".csv")
+          )
           message(paste("      Saving:", basename(output_filename)))
-          data.table::fwrite(binned_data, output_filename,
-                             dateTimeAs = "write.csv")
+          data.table::fwrite(
+            binned_data,
+            output_filename,
+            dateTimeAs = "write.csv"
+          )
         } # End loop through bin widths
       } else {
         message("      SKIPPING Files 6, 7, 8 because File 5 was empty.")
@@ -572,11 +621,13 @@ for (input_csv_path in input_files) {
       # --- Log successful processing in main log file ---
       if (!OVERRIDE_LOG) {
         message("  Successfully processed data. Logging file.")
-        tryCatch( write(input_csv_path, file = processed_log_file, append = TRUE),
-                  error = function(e) {
-                    warning("Could not write success to processed log file: ",
-                            processed_log_file)
-                  })
+        tryCatch(
+          write(input_csv_path, file = processed_log_file, append = TRUE),
+          error = function(e) {
+            warning("Could not write success to processed log file: ",
+                    processed_log_file)
+          }
+        )
       } else {
         message("  Successfully processed data (Override Mode - log file not updated).")
       }
@@ -586,22 +637,32 @@ for (input_csv_path in input_files) {
       if (!is.na(rat_id) && !is.na(exp_id) && !is.na(cohort_id) && !is.na(date_obj)) {
         current_run_file_metadata <- list()
         # Define which output files are relevant for the Shiny app's manifest
+        # <<< CORRECTED LIST TO INCLUDE File5, REMOVE File3 >>>
         output_files_to_log <- list(
-          list(type = "WheelMovement", filename = wheel_output_filename),
-          # list(type = "File3", filename = file3_output_filename), # Removed File 3 as requested
-          list(type = "File5", filename = file5_output_filename), # <<< CORRECTED: Added File 5 >>>
-          list(type = "File6", filename = file.path(target_sub_dir, paste0(base_output_name, "_File6.csv"))),
-          list(type = "File7", filename = file.path(target_sub_dir, paste0(base_output_name, "_File7.csv"))),
-          list(type = "File8", filename = file.path(target_sub_dir, paste0(base_output_name, "_File8.csv")))
+          list(type = "WheelMovement",
+               filename = wheel_output_filename),
+          list(type = "File5",
+               filename = file5_output_filename),
+          list(type = "File6",
+               filename = file.path(target_sub_dir, paste0(base_output_name, "_File6.csv"))),
+          list(type = "File7",
+               filename = file.path(target_sub_dir, paste0(base_output_name, "_File7.csv"))),
+          list(type = "File8",
+               filename = file.path(target_sub_dir, paste0(base_output_name, "_File8.csv")))
         )
+        # <<< END CORRECTION >>>
         
         files_logged_count = 0
         for (file_info in output_files_to_log) {
           # Check if the file actually exists after processing attempt
           if (file.exists(file_info$filename)) {
             # Use normalizePath for canonical paths
-            normalized_output_path <- normalizePath(file_info$filename,
-                                                    winslash = "/", mustWork = FALSE)
+            normalized_output_path <- normalizePath(
+              file_info$filename,
+              winslash = "/",
+              mustWork = FALSE
+            )
+            # Add metadata entry to list for this file
             current_run_file_metadata[[length(current_run_file_metadata) + 1]] <- data.table(
               file_path     = normalized_output_path,
               experiment_id = exp_id,
@@ -613,17 +674,21 @@ for (input_csv_path in input_files) {
             )
             files_logged_count <- files_logged_count + 1
           } else {
-            # Message if expected file wasn't found (e.g., skipped Files 6-8)
-            message(paste("    Output file not found, skipping metadata:",
-                          basename(file_info$filename)))
+            # Message if expected file wasn't found
+            message(
+              paste("    Output file not found, skipping metadata:",
+                    basename(file_info$filename))
+            )
           }
         } # end loop through files to log
         
         if (files_logged_count > 0) {
           # Add all metadata collected for this input file to the run's list
           all_metadata_this_run <- c(all_metadata_this_run, current_run_file_metadata)
-          message(paste("  Collected metadata for", files_logged_count,
-                        "output files for manifest."))
+          message(
+            paste("  Collected metadata for", files_logged_count,
+                  "output files for manifest.")
+          )
         } else {
           message("  No existing output files found to log for manifest for this input file.")
         }
@@ -635,7 +700,7 @@ for (input_csv_path in input_files) {
       # --- Mark file as handled ---
       file_handled_this_iter <- TRUE
       
-    }
+    } # --- End of 'else' block (processing files with data) ---
     
   }, error = function(e) {
     # --- ERROR Handling for this file ---
@@ -655,7 +720,7 @@ for (input_csv_path in input_files) {
     files_processed_this_run <- files_processed_this_run + 1
   }
   
-} 
+} # End main loop through input files
 
 
 # ============================================================================
@@ -671,9 +736,14 @@ if (length(all_metadata_this_run) > 0) {
   # Remove any entries where key info might be NA (e.g., due to parsing errors)
   required_manifest_cols_check <- c("file_path", "experiment_id", "cohort_id",
                                     "rat_id", "date", "file_type")
-  new_manifest_data <- na.omit(new_manifest_data, cols = required_manifest_cols_check)
-  message(paste("Collected metadata for", nrow(new_manifest_data),
-                "valid output files in this run."))
+  new_manifest_data <- na.omit(
+    new_manifest_data,
+    cols = required_manifest_cols_check
+  )
+  message(
+    paste("Collected metadata for", nrow(new_manifest_data),
+          "valid output files in this run.")
+  )
 } else {
   # Create empty table if no new metadata collected
   new_manifest_data <- data.table()
@@ -687,8 +757,8 @@ tryCatch({
   if (OVERRIDE_LOG || !file.exists(manifest_file_path)) {
     action_msg <- ifelse(
       OVERRIDE_LOG,
-      "OVERRIDE_LOG is TRUE. Creating new manifest from this run's processed files.",
-      "Manifest file does not exist. Creating new manifest from this run's processed files."
+      "OVERRIDE_LOG is TRUE. Creating new manifest from this run.",
+      "Manifest file does not exist. Creating new manifest from this run."
     )
     message(action_msg)
     final_manifest_data <- new_manifest_data
@@ -704,24 +774,31 @@ tryCatch({
     if (!is.data.table(existing_manifest_data) ||
         !all(required_manifest_cols %in% names(existing_manifest_data))) {
       existing_manifest_data <- data.table() # Treat as empty if invalid
-      warning(paste("Existing manifest file was invalid or missing required columns.",
-                    "Manifest will be built only from this run's data",
-                    "combined with potentially empty existing data."))
+      warning(
+        paste("Existing manifest file was invalid or missing required columns.",
+              "Manifest will be built only from this run's data",
+              "combined with potentially empty existing data.")
+      )
     }
-    message(paste("Read", nrow(existing_manifest_data), "entries from existing manifest."))
+    message(
+      paste("Read", nrow(existing_manifest_data), "entries from existing manifest.")
+    )
     
     # Identify unique output file paths processed/overwritten in THIS run
     unique_new_file_paths <- unique(new_manifest_data$file_path)
     
     # Remove old entries corresponding to these specific files from existing data
-    if (nrow(existing_manifest_data) > 0 && length(unique_new_file_paths) > 0 &&
+    if (nrow(existing_manifest_data) > 0 &&
+        length(unique_new_file_paths) > 0 &&
         "file_path" %in% names(existing_manifest_data)) {
       rows_to_keep <- !(existing_manifest_data$file_path %in% unique_new_file_paths)
       updated_existing_manifest <- existing_manifest_data[rows_to_keep, ]
       removed_count <- nrow(existing_manifest_data) - nrow(updated_existing_manifest)
       if (removed_count > 0) {
-        message(paste("Removed", removed_count,
-                      "old manifest entries for files processed/overwritten in this run."))
+        message(
+          paste("Removed", removed_count,
+                "old manifest entries for files processed/overwritten in this run.")
+        )
       }
     } else {
       # No removal needed if no existing data, no new data, or column missing
@@ -731,9 +808,10 @@ tryCatch({
     # Combine the updated old manifest with the new data
     final_manifest_data <- rbindlist(
       list(updated_existing_manifest, new_manifest_data),
-      use.names = TRUE, fill = TRUE # fill=TRUE handles potential column mismatches gracefully
+      use.names = TRUE,
+      fill = TRUE # fill=TRUE handles potential column mismatches gracefully
     )
-  } 
+  } # End incremental update block
   
   # --- Final Manifest Cleanup ---
   # Define core columns expected by Shiny app + optional time_str
@@ -741,9 +819,12 @@ tryCatch({
                     "date", "time_str", "file_type")
   # Select only existing core columns to avoid extras from fill=TRUE
   final_manifest_data <- final_manifest_data[,
-                                             intersect(core_columns, names(final_manifest_data)), with = FALSE]
+                                             intersect(core_columns, names(final_manifest_data)),
+                                             with = FALSE
+  ]
   
-  if (nrow(final_manifest_data) > 0 && "file_path" %in% names(final_manifest_data)) {
+  if (nrow(final_manifest_data) > 0 &&
+      "file_path" %in% names(final_manifest_data)) {
     # Remove rows with missing essential info (final check)
     essential_cols_check <- c("file_path", "experiment_id", "cohort_id",
                               "rat_id", "date", "file_type")
@@ -765,7 +846,6 @@ tryCatch({
   if (nrow(final_manifest_data) == 0) {
     message("Manifest data is empty. Saving empty manifest with defined columns.")
     # Define structure explicitly using the core columns expected by Shiny
-    # Make sure column types match what rbindlist would produce or are compatible
     final_manifest_data <- data.table(
       file_path     = character(0),
       experiment_id = character(0),
@@ -780,7 +860,9 @@ tryCatch({
   }
   
   # --- Save Final Manifest ---
-  message(paste("Saving updated manifest with", nrow(final_manifest_data), "entries..."))
+  message(
+    paste("Saving updated manifest with", nrow(final_manifest_data), "entries...")
+  )
   saveRDS(final_manifest_data, manifest_file_path)
   message("Manifest file successfully updated.")
   
@@ -811,11 +893,15 @@ message(paste("Output files saved in subdirectories under:", main_output_dir))
 message(paste("Processed input file log:", processed_log_file))
 message(paste("Output file manifest:", manifest_file_path))
 if (files_error_count > 0) {
-  message(paste("!! WARNING:", files_error_count,
-                "file(s) encountered errors during processing. Check messages above."))
+  message(
+    paste("!! WARNING:", files_error_count,
+          "file(s) encountered errors during processing. Check messages above.")
+  )
 }
 if (files_skipped_empty_count > 0) {
-  message(paste("NOTE:", files_skipped_empty_count,
-                "input file(s) contained only headers and were skipped (no output generated)."))
+  message(
+    paste("NOTE:", files_skipped_empty_count,
+          "input file(s) contained only headers and were skipped (no output generated).")
+  )
 }
 message("========================================================")
